@@ -6,6 +6,11 @@ workspace "3DRenderer"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
+libDir = {}
+libDir["SDL3"] = "%{prj.name}/vendor/SDL3"
+
+
+
 project "3DRenderer"
     location "3DRenderer"
 	kind "ConsoleApp"
@@ -16,8 +21,8 @@ project "3DRenderer"
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
 	objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
-    pchheader "pch.h"
-	pchsource "Aurora/src/pch.cpp"
+    --pchheader "pch.h"
+	--pchsource "Aurora/src/pch.cpp"
 
     files 
 	{ 
@@ -32,12 +37,22 @@ project "3DRenderer"
 
     includedirs 
 	{
-		"%{prj.name}/src"
+		"%{libDir.SDL3}/include"
+	}
+
+	libdirs
+	{
+		"%{libDir.SDL3}/lib/x64"
 	}
 
     links 
 	{
+		"SDL3.lib"
 	}
+
+	postbuildcommands {
+		'xcopy /Q /Y "%{prj.location}vendor\\SDL3\\lib\\x64\\SDL3.dll" "%{cfg.targetdir}\\."'
+    }
 
     filter "system:windows"
 		systemversion "latest"
@@ -48,7 +63,7 @@ project "3DRenderer"
 		}
 		
 	filter "configurations:Debug"
-		defines {"AR_DEBUG", "AR_ENABLE_ASSERTS"}
+		--defines {"_DEBUG", "X_ENABLE_ASSERTS"}
 		runtime "Debug"
 		symbols "on"
 		

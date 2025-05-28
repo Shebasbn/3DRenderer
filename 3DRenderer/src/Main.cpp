@@ -3,6 +3,7 @@
 #include <string>
 #include <SDL3\SDL.h>
 #include "Window.h"
+#include "vector.h"
 
 
 // Utility Functions
@@ -12,9 +13,12 @@ int min(int a, int b)
 }
 int max(int a, int b)
 {
-	return a < b ? a : b;
+	return a > b ? a : b;
 }
 
+constexpr int N_POINTS = 9 * 9 * 9;
+Renderer3D::Vec3_t CubePoints[N_POINTS];
+Renderer3D::Vec2_t ProjectedPoints[N_POINTS];
 
 bool Running = false;
 static Renderer3D::Window Window;
@@ -35,20 +39,20 @@ void DrawGrid(uint32_t space, uint32_t color)
 	}
 }
 
-void DrawPixel(uint32_t x, uint32_t y, uint32_t color)
+void DrawPixel(int x, int y, uint32_t color)
 {
-	if (x < Window.GetWidth() && y < Window.GetHeight())
+	if (x >= 0 && x < Window.GetWidth() && y >= 0 && y < Window.GetHeight())
 		FrameBuffer[(Window.GetWidth() * y) + x] = color;
 }
 
-void DrawRectangle(uint32_t posX, uint32_t posY, uint32_t width, uint32_t height, uint32_t color)
+void DrawRectangle(int posX, int posY, int width, int height, uint32_t color)
 {
-	for (uint32_t y = posY; y <= min((posY + height), Window.GetHeight()); y++)
+	for (int y = max(posY, 0); y <= min((posY + height), Window.GetHeight()-1); y++)
 	{
 		//int step = ((y == posY) || (y == (posY + height))) ? 1 : width;
-		for (uint32_t x = posX; x <= min((posX + width), Window.GetWidth()); x++)
+		for (int x = max(posX, 0); x <= min((posX + width), Window.GetWidth()-1); x++)
 		{
-			FrameBuffer[(Window.GetWidth() * y) + x] = color;
+			DrawPixel(x, y, color);
 		}
 	}
 }
@@ -103,6 +107,19 @@ bool SetUp()
 		return false;
 	}
 
+	int pointCount{};
+	for (float x = -1.0f; x <= 1.0f; x += 0.25f)
+	{
+		for (float y = -1.0f; y <= 1.0f; y += 0.25f)
+		{
+			for (float z = -1.0f; z <= 1.0f; z += 0.25f)
+			{
+				Renderer3D::Vec3_t newPoint{ x, y, z };
+				CubePoints[pointCount++] = newPoint;
+			}
+		}
+	}
+
 	return true;
 }
 
@@ -125,22 +142,37 @@ void ProcessInput()
 	}
 }
 
+Renderer3D::Vec2_t Project(Renderer3D::Vec3_t point)
+{
+	return Renderer3D::Vec2_t(point.X, point.Y);
+}
+
 void Update(float dt)
 {
-
+	for (int i = 0; i < N_POINTS; i++)
+	{
+		ProjectedPoints[i] = Project(CubePoints[i]);
+	}
 }
 
 void Render()
 {
-	SDL_SetRenderDrawColor(Window.GetRenderer(), 30, 30, 30, 255);
-	SDL_RenderClear(Window.GetRenderer());
-
 	DrawGrid(10, 0xFFFFFFFF);
-	
-	DrawPixel(25, 25, 0xFFFFFF00);
-	
-	DrawRectangle(100, 100, 400, 200, 0xFFAA55AA);
 
+	for (int i = 0; i < N_POINTS; i++)
+	{
+		Renderer3D::Vec2_t projectedPoint = ProjectedPoints[i];
+		float newX = (projectedPoint.X * Window.GetWidth() / 2.0f) + Window.GetWidth() / 2.0f;
+		float newY = (projectedPoint.Y * Window.GetHeight() / 2.0f) + Window.GetHeight() / 2.0f;
+		float width = 4.0f;
+		float height = 4.0f;
+		DrawRectangle(
+			newX - width/2.0f,
+			newY - height/2.0f,
+			width, 
+			height, 
+			0xFFFFFF00);
+	}
 
 	RenderFrameBuffer();
 	UpdateFrameBuffer(0xFF0F0F0F);

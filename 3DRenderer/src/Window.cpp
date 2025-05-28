@@ -4,7 +4,7 @@
 namespace Renderer3D
 {
 	Window::Window()
-		: m_Title{ "3DRenderer" }, m_Window{}, m_Renderer{}, m_Width{ 1080 }, m_Height{ 720 }
+		: m_Title{ "3DRenderer" }, m_Window{nullptr}, m_Renderer{ nullptr }, m_Width{ 1080 }, m_Height{ 720 }, m_IsFullscreen{true}
 	{
 		//InitializeWindow();
 	}
@@ -23,28 +23,36 @@ namespace Renderer3D
 
 		SDL_DisplayID DisplayID = SDL_GetPrimaryDisplay();
 		const SDL_DisplayMode* DisplayMode = SDL_GetCurrentDisplayMode(DisplayID);
-		m_Width = DisplayMode->w;
-		m_Height = DisplayMode->h;
-
+		
+		if (m_IsFullscreen)
+		{
+			m_Width = DisplayMode->w;
+			m_Height = DisplayMode->h;
+		}
+		SDL_Window* window;
+		SDL_Renderer* renderer;
 		if (!SDL_CreateWindowAndRenderer(
-			m_Title,
+			m_Title.c_str(),
 			m_Width,
 			m_Height,
-			SDL_WINDOW_BORDERLESS | SDL_WINDOW_FULLSCREEN,
-			&m_Window, &m_Renderer))
+			SDL_WINDOW_BORDERLESS,
+			&window, &renderer
+		))
 		{
 			std::cerr << "ERROR: SDL Window and Renderer Creation Failed!\n";
 			std::cerr << SDL_GetError() << "\n";
 			return false;
 		}
+		m_Window.reset(window);
+		m_Renderer.reset(renderer);
 
+		SDL_SetWindowFullscreen(m_Window.get(), m_IsFullscreen);
 		return true;
 	}
 
 	void Window::DestroyWindow()
 	{
-		SDL_DestroyRenderer(m_Renderer);
-		SDL_DestroyWindow(m_Window);
-		SDL_Quit();
+		m_Window.reset();
+		m_Renderer.reset();
 	}
 }

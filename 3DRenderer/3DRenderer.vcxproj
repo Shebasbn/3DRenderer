@@ -104,11 +104,12 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\Window.cpp" />
-    <ClCompile Include="src\Main.cpp" />
+    <ClInclude Include="src\Vector.h" />
+    <ClInclude Include="src\Window.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\Window.h" />
+    <ClCompile Include="src\Main.cpp" />
+    <ClCompile Include="src\Window.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

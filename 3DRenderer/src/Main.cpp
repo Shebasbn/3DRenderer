@@ -5,6 +5,16 @@
 #include "Window.h"
 
 
+// Utility Functions
+int min(int a, int b)
+{
+	return a < b ? a : b;
+}
+int max(int a, int b)
+{
+	return a < b ? a : b;
+}
+
 
 bool Running = false;
 static Renderer3D::Window Window;
@@ -13,9 +23,64 @@ SDL_Texture* FrameBufferTexture = nullptr;
 
 
 
+void DrawGrid(uint32_t space, uint32_t color)
+{
+	for (uint32_t y = 0; y < Window.GetHeight(); y += space)
+	{
+		//int step = y % space == 0 ? 1 : space;
+		for (uint32_t x = 0; x < Window.GetWidth(); x += space)
+		{
+			FrameBuffer[(Window.GetWidth() * y) + x] = color;
+		}
+	}
+}
+
+void DrawPixel(uint32_t x, uint32_t y, uint32_t color)
+{
+	if (x < Window.GetWidth() && y < Window.GetHeight())
+		FrameBuffer[(Window.GetWidth() * y) + x] = color;
+}
+
+void DrawRectangle(uint32_t posX, uint32_t posY, uint32_t width, uint32_t height, uint32_t color)
+{
+	for (uint32_t y = posY; y <= min((posY + height), Window.GetHeight()); y++)
+	{
+		//int step = ((y == posY) || (y == (posY + height))) ? 1 : width;
+		for (uint32_t x = posX; x <= min((posX + width), Window.GetWidth()); x++)
+		{
+			FrameBuffer[(Window.GetWidth() * y) + x] = color;
+		}
+	}
+}
+
+void RenderFrameBuffer()
+{
+	if (!SDL_UpdateTexture(FrameBufferTexture, NULL, FrameBuffer, (int)(Window.GetWidth() * sizeof(uint32_t))))
+	{
+		std::cerr << "ERROR:SDL UpdateTexture failed!\n";
+		std::cerr << SDL_GetError() << "\n";
+		return;
+	}
+	if (!SDL_RenderTexture(Window.GetRenderer(), FrameBufferTexture, NULL, NULL))
+	{
+		std::cerr << "ERROR:SDL RenderTexture has failed!\n";
+		std::cerr << SDL_GetError() << "\n";
+		return;
+	}
+}
+
+void UpdateFrameBuffer(uint32_t color = 0)
+{
+	for (uint32_t i = 0; i < Window.GetHeight() * Window.GetWidth(); i++)
+	{
+		FrameBuffer[i] = color;
+	}
+}
+
+
 bool SetUp()
 {
-	FrameBuffer = (uint32_t*)malloc(Window.m_Width * Window.m_Height * sizeof(uint32_t));
+	FrameBuffer = (uint32_t*)malloc(Window.GetWidth() * Window.GetHeight() * sizeof(uint32_t));
 
 	if (!FrameBuffer)
 	{
@@ -24,11 +89,11 @@ bool SetUp()
 	}
 
 	FrameBufferTexture = SDL_CreateTexture(
-		Window.m_Renderer,
+		Window.GetRenderer(),
 		SDL_PIXELFORMAT_ARGB8888,
 		SDL_TEXTUREACCESS_STREAMING,
-		Window.m_Width,
-		Window.m_Height
+		Window.GetWidth(),
+		Window.GetHeight()
 	);
 
 	if (!FrameBufferTexture)
@@ -50,6 +115,7 @@ void ProcessInput()
 	case SDL_EVENT_QUIT:
 		Running = false;
 		break;
+		
 	case SDL_EVENT_KEY_DOWN:
 		if (event.key.key == SDLK_ESCAPE)
 			Running = false;
@@ -64,81 +130,29 @@ void Update(float dt)
 
 }
 
-void RenderFrameBuffer()
-{
-	if (!SDL_UpdateTexture(FrameBufferTexture, NULL, FrameBuffer, (int)(Window.m_Width * sizeof(uint32_t))))
-	{
-		std::cerr << "ERROR:SDL UpdateTexture failed!\n";
-		std::cerr << SDL_GetError() << "\n";
-		return;
-	}
-	if (!SDL_RenderTexture(Window.m_Renderer, FrameBufferTexture, NULL, NULL))
-	{
-		std::cerr << "ERROR:SDL RenderTexture has failed!\n";
-		std::cerr << SDL_GetError() << "\n";
-		return;
-	}
-}
-
-void UpdateFrameBuffer(uint32_t color = 0)
-{
-	for (uint32_t i = 0; i < Window.m_Height * Window.m_Width; i++)
-	{
-		FrameBuffer[i] = color;
-	}
-}
-
-void DrawGrid(uint32_t space, uint32_t color)
-{
-	for (uint32_t y = 0; y < Window.m_Height; y += space)
-	{
-		//int step = y % space == 0 ? 1 : space;
-		for (uint32_t x = 0; x < Window.m_Width; x += space)
-		{
-			FrameBuffer[(Window.m_Width * y) + x] = color;
-		}
-	}
-}
-
-int min(int a, int b)
-{
-	return a < b ? a : b;
-}
-int max(int a, int b)
-{
-	return a < b ? a : b;
-}
-
-void DrawRectangle(uint32_t posX, uint32_t posY, uint32_t width, uint32_t height, uint32_t color)
-{
-	for (uint32_t y = posY; y <= min((posY + height), Window.m_Height); y++)
-	{
-		//int step = ((y == posY) || (y == (posY + height))) ? 1 : width;
-		for (uint32_t x = posX; x <= min((posX + width), Window.m_Height); x++)
-		{
-			FrameBuffer[(Window.m_Width * y) + x] = color;
-		}
-	}
-}
-
 void Render()
 {
-	SDL_SetRenderDrawColor(Window.m_Renderer, 30, 30, 30, 255);
-	SDL_RenderClear(Window.m_Renderer);
+	SDL_SetRenderDrawColor(Window.GetRenderer(), 30, 30, 30, 255);
+	SDL_RenderClear(Window.GetRenderer());
 
-	UpdateFrameBuffer(0xFF0F0F0F);
 	DrawGrid(10, 0xFFFFFFFF);
+	
+	DrawPixel(25, 25, 0xFFFFFF00);
+	
 	DrawRectangle(100, 100, 400, 200, 0xFFAA55AA);
+
+
 	RenderFrameBuffer();
+	UpdateFrameBuffer(0xFF0F0F0F);
 
-
-	SDL_RenderPresent(Window.m_Renderer);
+	SDL_RenderPresent(Window.GetRenderer());
 }
 
 void FreeResources()
 {
-	delete FrameBuffer;
+	free(FrameBuffer);
 	SDL_DestroyTexture(FrameBufferTexture);
+	SDL_Quit();
 }
 
 int main(int argc, char* args[])

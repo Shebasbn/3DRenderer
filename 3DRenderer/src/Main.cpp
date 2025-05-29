@@ -5,6 +5,40 @@
 #include "Window.h"
 #include "vector.h"
 
+struct Vec3d
+{
+	float x, y, z;
+};
+
+struct Triangle
+{
+	Vec3d vertex[3];
+};
+
+struct Mesh
+{
+	std::vector<Triangle> triangles;
+};
+
+struct Mat4x4
+{
+	float m[4][4]{};
+};
+
+void MultiplyMatrixVector(Vec3d& input, Vec3d& output, Mat4x4& matrix)
+{
+	output.x = input.x * matrix.m[0][0] + input.y * matrix.m[1][0] + input.z * matrix.m[2][0] + matrix.m[3][0];
+	output.y = input.x * matrix.m[0][1] + input.y * matrix.m[1][1] + input.z * matrix.m[2][1] + matrix.m[3][1];
+	output.z = input.x * matrix.m[0][2] + input.y * matrix.m[1][2] + input.z * matrix.m[2][2] + matrix.m[3][2];
+	float w = input.x * matrix.m[0][3] + input.y * matrix.m[1][3] + input.z * matrix.m[2][3] + matrix.m[3][3];
+
+	if (w != 0.0f)
+	{
+		output.x /= w;
+		output.y /= w;
+		output.z /= w;
+	}
+}
 
 // Utility Functions
 int min(int a, int b)
@@ -19,6 +53,25 @@ int max(int a, int b)
 constexpr int N_POINTS = 9 * 9 * 9;
 Renderer3D::Vec3_t CubePoints[N_POINTS];
 Renderer3D::Vec2_t ProjectedPoints[N_POINTS];
+
+Renderer3D::Vec3_t CameraPosition{ 0, 0, -5 };
+Renderer3D::Vec3_t CubeRotation{};
+
+Renderer3D::Vec3_t CubeVertices[8]
+{
+	{-1.0f, -1.0f, -1.0f}, 
+	{-1.0f, 1.0f, -1.0f}, 
+	{-1.0f, -1.0f, 1.0f}, 
+	{1.0f, -1.0f, -1.0f}, 
+};
+
+Mesh CubeMesh;
+Mat4x4 ProjectionMatrix{};
+
+
+
+
+float FovFactor = 648;
 
 bool Running = false;
 static Renderer3D::Window Window;
@@ -43,6 +96,56 @@ void DrawPixel(int x, int y, uint32_t color)
 {
 	if (x >= 0 && x < Window.GetWidth() && y >= 0 && y < Window.GetHeight())
 		FrameBuffer[(Window.GetWidth() * y) + x] = color;
+}
+
+void DrawLine(float startX, float startY, float endX, float endY, uint32_t color)
+{
+	float deltaX = endX - startX;
+	float deltaY = endY - startY;
+
+	float absDeltaX = fabsf(deltaX);
+	float absDeltaY = fabsf(deltaY);
+
+	float stepX = (deltaX > 0.0f) ? 1.0f : -1.0f;
+	float stepY = (deltaY > 0.0f) ? 1.0f : -1.0f;
+
+	float x = startX;
+	float y = startY;
+
+	if (absDeltaX > absDeltaY)
+	{
+		float slope = deltaY / deltaX;
+		float error = 0.5f;
+		for (int i = 0; i <= (int)absDeltaX; ++i)
+		{
+			DrawPixel(roundf(x), roundf(y), color);
+			x += stepX;
+			error += fabsf(slope);
+			if (error >= 1.0f)
+			{
+				y += stepY;
+				error -= 1.0f;
+			}
+		}
+	}
+	else
+	{
+		float invSlope = deltaX / deltaY;
+		float error = 0.5f;
+
+		for (int i = 0; i <= (int)absDeltaY; ++i)
+		{
+			DrawPixel(roundf(x), roundf(y), color);
+			y += stepY;
+			error += fabsf(invSlope);
+			if (error >= 1.0f)
+			{
+				x += stepX;
+				error -= 1.0f;
+			}
+		}
+	}
+
 }
 
 void DrawRectangle(int posX, int posY, int width, int height, uint32_t color)
@@ -144,35 +247,85 @@ void ProcessInput()
 
 Renderer3D::Vec2_t Project(Renderer3D::Vec3_t point)
 {
-	return Renderer3D::Vec2_t(point.X, point.Y);
+	return Renderer3D::Vec2_t(
+		((point.X * FovFactor) / point.Z) + (Window.GetWidth() / 2.0f),
+		((point.Y * FovFactor) / point.Z) + (Window.GetHeight() / 2.0f)
+	);
 }
 
 void Update(float dt)
 {
+	std::cout << "Delta-Time: " << dt << std::endl;
+	CubeRotation.X += 0.0f * dt;
+	CubeRotation.Y += 0.0f * dt;
+	CubeRotation.Z += 0.1f * dt;
+
 	for (int i = 0; i < N_POINTS; i++)
 	{
-		ProjectedPoints[i] = Project(CubePoints[i]);
+		Renderer3D::Vec3_t point = CubePoints[i];
+
+		Renderer3D::Vec3_t transformedPoint = point.RotateX(CubeRotation.X);
+		transformedPoint = transformedPoint.RotateY(CubeRotation.Y);
+		transformedPoint = transformedPoint.RotateZ(CubeRotation.Z);
+
+		transformedPoint.Z -= CameraPosition.Z;
+		ProjectedPoints[i] = Project(transformedPoint);
 	}
+
+
+	for (const auto& triangle: CubeMesh.triangles)
+	{
+		Triangle triProjected, triTranslated;
+
+		triTranslated = triangle;
+		for (int i = 0; i < 3; i++)
+		{
+			triTranslated.vertex[i].z = triangle.vertex[i].z + 3.0f;
+		}
+
+		MultiplyMatrixVector(triTranslated.vertex[0], triProjected.vertex[0], ProjectionMatrix);
+		MultiplyMatrixVector(triTranslated.vertex[1], triProjected.vertex[1], ProjectionMatrix);
+		MultiplyMatrixVector(triTranslated.vertex[2], triProjected.vertex[2], ProjectionMatrix);
+
+		// Scale into view
+		for (int i = 0; i < 3; i++)
+		{
+			triProjected.vertex[i].x = (triProjected.vertex[i].x + 1.0f) * 0.5f * (float)Window.GetWidth();
+			triProjected.vertex[i].y = (triProjected.vertex[i].y + 1.0f) * 0.5f * (float)Window.GetHeight();
+		}
+
+		DrawLine(triProjected.vertex[0].x, triProjected.vertex[0].y, triProjected.vertex[1].x, triProjected.vertex[1].y, 0xFFFFFFFF);
+		DrawLine(triProjected.vertex[1].x, triProjected.vertex[1].y, triProjected.vertex[2].x, triProjected.vertex[2].y, 0xFFFFFFFF);
+		DrawLine(triProjected.vertex[2].x, triProjected.vertex[2].y, triProjected.vertex[0].x, triProjected.vertex[0].y, 0xFFFFFFFF);
+	}
+
+
 }
 
 void Render()
 {
 	DrawGrid(10, 0xFFFFFFFF);
 
-	for (int i = 0; i < N_POINTS; i++)
+	/*for (int i = 0; i < N_POINTS; i++)
 	{
 		Renderer3D::Vec2_t projectedPoint = ProjectedPoints[i];
-		float newX = (projectedPoint.X * Window.GetWidth() / 2.0f) + Window.GetWidth() / 2.0f;
-		float newY = (projectedPoint.Y * Window.GetHeight() / 2.0f) + Window.GetHeight() / 2.0f;
 		float width = 4.0f;
 		float height = 4.0f;
 		DrawRectangle(
-			newX - width/2.0f,
-			newY - height/2.0f,
+			projectedPoint.X - (width/2.0f),
+			projectedPoint.Y - (height/2.0f),
 			width, 
 			height, 
 			0xFFFFFF00);
-	}
+	}*/
+
+	DrawLine(100, 100, 200, 200, 0xFFFFFFFF);
+	DrawLine(200, 200, 100, 200, 0xFFFFFFFF);
+	DrawLine(100, 200, 100, 100, 0xFFFFFFFF);
+
+	//DrawLine(50.0f, 100.0f, 200.0f, 150.0f, 0xFFFFFFFF);  // shallow slope
+	//DrawLine(200.0f, 150.0f, 50.0f, 100.0f, 0xFF00FF00);  // reversed
+	//DrawLine(100.0f, 200.0f, 100.0f, 50.0f, 0xFFFF0000);  // vertical
 
 	RenderFrameBuffer();
 	UpdateFrameBuffer(0xFF0F0F0F);
@@ -198,6 +351,47 @@ int main(int argc, char* args[])
 		std::cerr << "ERROR: Failed to Set up App!\n";
 		return EXIT_FAILURE; 
 	}
+
+	CubeMesh.triangles =
+	{
+		// SOUTH
+		{ 0.0f, 0.0f, 0.0f,    0.0f, 1.0f, 0.0f,    1.0f, 1.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f,    1.0f, 1.0f, 0.0f,    1.0f, 0.0f, 0.0f },
+
+		// EAST                                                      
+		{ 1.0f, 0.0f, 0.0f,    1.0f, 1.0f, 0.0f,    1.0f, 1.0f, 1.0f },
+		{ 1.0f, 0.0f, 0.0f,    1.0f, 1.0f, 1.0f,    1.0f, 0.0f, 1.0f },
+
+		// NORTH                                                     
+		{ 1.0f, 0.0f, 1.0f,    1.0f, 1.0f, 1.0f,    0.0f, 1.0f, 1.0f },
+		{ 1.0f, 0.0f, 1.0f,    0.0f, 1.0f, 1.0f,    0.0f, 0.0f, 1.0f },
+
+		// WEST                                                      
+		{ 0.0f, 0.0f, 1.0f,    0.0f, 1.0f, 1.0f,    0.0f, 1.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f,    0.0f, 1.0f, 0.0f,    0.0f, 0.0f, 0.0f },
+
+		// TOP                                                       
+		{ 0.0f, 1.0f, 0.0f,    0.0f, 1.0f, 1.0f,    1.0f, 1.0f, 1.0f },
+		{ 0.0f, 1.0f, 0.0f,    1.0f, 1.0f, 1.0f,    1.0f, 1.0f, 0.0f },
+
+		// BOTTOM                                                    
+		{ 1.0f, 0.0f, 1.0f,    0.0f, 0.0f, 1.0f,    0.0f, 0.0f, 0.0f },
+		{ 1.0f, 0.0f, 1.0f,    0.0f, 0.0f, 0.0f,    1.0f, 0.0f, 0.0f },
+
+	};
+
+	float Near = 0.1f;
+	float Far = 1000.0f;
+	float Fov = 90.0f;
+	float AspectRatio = (float)Window.GetWidth() / (float)Window.GetHeight();
+	float FovRad = 1.0f / tanf(Fov * 0.5f / 180.0f * 3.14159f);
+
+	ProjectionMatrix.m[0][0] = AspectRatio * FovRad;
+	ProjectionMatrix.m[1][1] = FovRad;
+	ProjectionMatrix.m[2][2] = Far / (Far - Near);
+	ProjectionMatrix.m[3][2] = (-Far * Near) / (Far - Near);
+	ProjectionMatrix.m[2][3] = 1.0f;
+	ProjectionMatrix.m[3][3] = 0.0f;
 
 	while (Running)
 	{

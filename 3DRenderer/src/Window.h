@@ -40,10 +40,18 @@ namespace Renderer3D
 		SDL_Renderer* GetRenderer() const { return m_Renderer.get(); }
 
 		uint32_t GetWidth() const { return m_Width; }
-		void SetWidth(uint32_t width) { m_Width = width; }
-
 		uint32_t GetHeight() const { return m_Height; }
-		void SetHeight(uint32_t height) { m_Height = height; }
+		
+		void Resize(uint32_t width, uint32_t height) 
+		{ 
+			m_Width = width; 
+			m_Height = height;
+			CalcAspectRatio();
+		}
+
+
+		float GetAspectRatio() const { return m_AspectRatio; }
+		void CalcAspectRatio() { m_AspectRatio = (float)m_Height / (float)m_Width; }
 
 		const std::string& GetTitle() const { return m_Title; }
 		void SetTitle(const std::string& title) { m_Title = title; }
@@ -66,6 +74,7 @@ namespace Renderer3D
 		std::string m_Title;
 		uint32_t m_Width;
 		uint32_t m_Height;
+		float m_AspectRatio;
 		bool m_IsFullscreen;
 	};
 }
